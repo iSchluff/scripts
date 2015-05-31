@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-#    Copyright (C) 2014  derpeter
+#    Copyright (C) 2015  derpeter
 #    derpeter@berlin.ccc.de
 #
 #    This program is free software: you can redistribute it and/or modify
@@ -35,139 +35,10 @@ from media_ccc_de_api_client import *
 from auphonic_client import *
 from youtube_client import *
 from twitter_client import *
+from pyasn1_modules.rfc4210 import ErrorMsgContent
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-
-logging.addLevelName( logging.WARNING, "\033[1;33m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
-logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
-logging.addLevelName( logging.INFO, "\033[1;32m%s\033[1;0m" % logging.getLevelName(logging.INFO))
-logging.addLevelName( logging.DEBUG, "\033[1;85m%s\033[1;0m" % logging.getLevelName(logging.DEBUG))
-
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-
-logging.info("C3TT publishing")
-logging.debug("reading config")
-
-### handle config
-#make sure we have a config file
-if not os.path.exists('client.conf'):
-    logging.error("Error: config file not found")
-    sys.exit(1)
-    
-config = configparser.ConfigParser()
-config.read('client.conf')
-source = config['general']['source']
-dest = config['general']['dest']
-
-source = "c3tt" #TODO quickfix for strange parser behavior
-
-if source == "c3tt":
-    ################### C3 Tracker ###################
-    #project = "projectslug"
-    group = config['C3Tracker']['group']
-    secret =  config['C3Tracker']['secret']
-
-    if config['C3Tracker']['host'] == "None":
-            host = socket.getfqdn()
-    else:
-        host = config['C3Tracker']['host']
-
-    url = config['C3Tracker']['url']
-    from_state = config['C3Tracker']['from_state']
-    to_state = config['C3Tracker']['to_state']
-    token = config['twitter']['token'] 
-    token_secret = config['twitter']['token_secret']
-    consumer_key = config['twitter']['consumer_key']
-    consumer_secret = config['twitter']['consumer_secret']
-
-if True:
-    ################### media.ccc.de #################
-    #API informations
-    api_url =  config['media.ccc.de']['api_url']
-    api_key =  config['media.ccc.de']['api_key']
-    #download_thumb_base_url = config['media.ccc.de']['download_thumb_base_url']
-    #download_base_url = config['media.ccc.de']['download_base_url']
-
-    #release host information
-    # upload_host = config['media.ccc.de']['uplod_host']
-    # upload_user = config['media.ccc.de']['upload_user']
-    # upload_pw = config['media.ccc.de']['upload_pw'] #it is recommended to use key login. PW musts be set but can be random
-    # upload_path = config['media.ccc.de']['upload_path']
-
-#if we dont use the tracker we need to get the informations from the config
-if source != 'c3tt':
-    #################### conference information ######################
-    rec_path = config['conference']['rec_path']
-    image_path = config['conference']['image_path']
-    webgen_loc = config['conference']['webgen_loc']
-
-    ################### script environment ########################
-    # base dir for video input files (local)
-    video_base = config['env']['video_base']
-    # base dir for video output files (local)
-    output = config['env']['output']
-
-#path to the thumb export.
-#this is also used as postfix for the publishing dir
-thumb_path = config['env']['thumb_path']
-
-# #codec / container related paths
-# #this paths should be the same on media and local !!
-# #if you want to add new codecs make sure media.ccc.de knows the mimetype BEFORE you push something
-# codecs = {
-# "h264" : {"path" : "mp4/",
-#           "ext" : ".mp4",
-#           "mimetype" : "video/mp4"},
-# "webm" : {"path" : "webm/",
-#           "ext": ".webm",
-#           "mimetype" : "video/webm"},
-# "ogv" : {"path" : "ogv/",
-#          "ext" : ".ogv",
-#          "mimetype" : "video/ogg"},
-# "mp3" : {"path" : "mp3/", 
-#          "ext" : ".mp3",
-#          "mimetype" : "audio/mpeg"},
-# "opus" : {"path" : "opus/",
-#           "ext" : ".opus", 
-#           "mimetype" : "audio/opus"},
-# "ogg"  : {"path" : "ogg/",
-#           "ext"  :  ".ogg"}
-# }
-
-#internal vars
-ticket = None
-ticket_failed = True
-filesize = 0
-length = 0
-sftp = None
-ssh = None
-title = None
-frab_data = None
-acronyms = None
-guid = None
-filename = None
-debug = 0
-slug = None
-slug_c = None #slug without :
-rpc_client = None
-title = None
-subtitle = None 
-description = None
-profile_slug = None
-folder = None
-mime_type = None
-
-#TODO das sollte ne liste werden
-target_youtube = None
-target_media = None
-
-#TODO das ist von der logic her IMHO falsch rum das muss schöner werden
-def TargetFromPropertie():
+#TODO This should go into main
+def targetFromPropertie():
     global target_youtube
     global target_media
 
@@ -175,16 +46,17 @@ def TargetFromPropertie():
     if ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes" and not has_youtube_url:
         logging.debug("publishing on youtube")
         target_youtube = True
-        youtubeFromTracker()
+        youtubeFromTicket()
 
     logging.debug("encoding profile media flag: " + ticket['Publishing.Media.EnableProfile'] + " project media flag: " + ticket['Publishing.Media.Enable'])
     if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes":
         logging.debug("publishing on media")
         target_media = True
-        mediaFromTracker()
+        mediaFromTicket()
 
-################################# Here be dragons #################################
-def iCanHazTicket():
+def ticketFromTracker():
+    """ Get a ticket from the tracker and prepare internal variables based on the ticket
+    """
     logging.info("getting ticket from " + url)
     logging.info("=========================================")
     
@@ -212,6 +84,7 @@ def iCanHazTicket():
         global description
         global download_base_url
         global folder
+        
         #todo this shoul only be used if youtube propertie is set
         global has_youtube_url
         
@@ -229,6 +102,7 @@ def iCanHazTicket():
         download_base_url =  str(ticket['Publishing.Base.Url'])
         profile_extension = ticket['EncodingProfile.Extension']
         profile_slug = ticket['EncodingProfile.Slug']
+        
         #todo this shoul only be used if youtube propertie is set
         if 'YouTube.Url0' in ticket and ticket['YouTube.Url0'] != "":
                 has_youtube_url = True
@@ -246,52 +120,46 @@ def iCanHazTicket():
         logging.debug("Data for media: guid: " + guid + " slug: " + slug_c + " acronym: " + acronym  + " filename: "+ filename + " title: " + title + " local_filename: " + local_filename + ' video_base: ' + video_base + ' output: ' + output)
         
         if not os.path.isfile(video_base + local_filename):
-            logging.error("Source file does not exist (%s)" % (video_base + local_filename))
-            setTicketFailed(ticket_id, "Source file does not exist (%s)" % (video_base + local_filename), url, group, host, secret)
-            sys.exit(-1)
-        
+            cleanup("Source file does not exist (" + video_base + local_filename +")",-1)
+
         if not os.path.exists(output):
-            logging.error("Output path does not exist (%s)" % (output))
-            setTicketFailed(ticket_id, "Output path does not exist (%s)" % (output), url, group, host, secret)
-            sys.exit(-1)
-        else: 
-            if not os.access(output, os.W_OK):
-                logging.error("Output path is not writable (%s)" % (output))
-                setTicketFailed(ticket_id, "Output path is not writable (%s)" % (output), url, group, host, secret)
-                sys.exit(-1)
+            cleanup("Output path does not exist ("+output+")",-1)
+        
+        if not os.access(output, os.W_OK):
+            cleanup("Output path is not writable ("+output+")",-1)
     else:
         logging.warn("No ticket for this task, exiting")
-        sys.exit(0);
+        cleanup()
 
-def mediaFromTracker():
+def mediaFromTicket():
+    """ prepare the media.ccc.de API call from Ticket
+    """
+    
     logging.info("creating event on " + api_url)
     logging.info("=========================================")
 
     #create a event on media
+    #TODO master/slave ticket handling
     if profile_slug != "mp3" and profile_slug != "opus":        
         try:
             make_event(api_url, download_base_url, local_filename, local_filename_base, api_key, acronym, guid, video_base, output, slug, title, subtitle, description)
         except RuntimeError as err:
-            logging.error("Creating event failed")
-            setTicketFailed(ticket_id, "Creating event failed, in case of audio releases make sure event exists: \n" + str(err), url, group, host, secret)
-            sys.exit(-1)
+            cleanup("Creating event on media API failed, in case of audio releases make sure event exists: \n" + str(err), -1)
     
     #publish the media file on media
     if not 'Publishing.Media.MimeType' in ticket:
-        setTicketFailed(ticket_id, "Publishing failed: No mime type, please use property Publishing.Media.MimeType in encoding profile! \n" + str(err), url, group, host, secret)
-    mime_type = ticket['Publishing.Media.MimeType']
+        cleanup("No mime type set",-1)
+    else:
+        mime_type = ticket['Publishing.Media.MimeType']
 
     try:
         publish(local_filename, filename, api_url, download_base_url, api_key, guid, filesize, length, mime_type, folder, video_base)
     except RuntimeError as err:
-        setTicketFailed(ticket_id, "Publishing failed: \n" + str(err), url, group, host, secret)
-        logging.error("Publishing failed: \n" + str(err))
-        sys.exit(-1) 
-
-def auphonicFromTracker():
-    logging.info("Pushing file to Auphonic")
-
-def youtubeFromTracker():
+        cleanup("Publishing on media API failed" + str(err),-1)
+ 
+def youtubeFromTicket():
+    """ prepare the youtube call to publish on youtube
+    """
     try:
         youtubeUrls = publish_youtube(ticket, config['youtube']['client_id'], config['youtube']['secret'])
         props = {}
@@ -300,14 +168,165 @@ def youtubeFromTracker():
 
         setTicketProperties(ticket_id, props, url, group, host, secret)
     except RuntimeError as err:
-        setTicketFailed(ticket_id, "Publishing failed: \n" + str(err), url, group, host, secret)
-        logging.error("Publishing failed: \n" + str(err))
-        sys.exit(-1)
+        cleanup("Publishing to youtube failed: \n" + str(err),-1)
 
-iCanHazTicket()
-TargetFromPropertie()
-send_tweet(ticket, token, token_secret, consumer_key, consumer_secret)
+def cleanUp(msg=None,exit_code=None):
+    """This should be called in case of an error / exception or at the end of all functions to bring the tracker 
+    and twitter up to date. Arguments are optional an should only be set in error case.
+    """
+    
+    #TODO check if we already have ticket, if not don't call the tracker
+    if exit_code < 0: #something went wrong
+        if msg:
+            setTicketFailed(ticket_id, "Publishing failed: \n" + str(msg), url, group, host, secret)
+            logging.error(msg)
+        else:
+            setTicketFailed(ticket_id, "Publishing failed: \n" + " unknown reason", url, group, host, secret)
+            logging.error(msg)
+        sys.exit(exit_code)
+    else: #all good lets tweet about it (if configured)
+        send_tweet(ticket, token, token_secret, consumer_key, consumer_secret)
+        setTicketDone(ticket_id, url, group, host, secret)
+        logging.info("cleanup down, exiting normal")
+    
+    sys.exit(0)
 
-# set ticket done
-logging.info("set ticket done")
-setTicketDone(ticket_id, url, group, host, secret)
+def main():
+    """init and control flow a done here
+    """
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    
+    logging.addLevelName( logging.WARNING, "\033[1;33m%s\033[1;0m" % logging.getLevelName(logging.WARNING))
+    logging.addLevelName( logging.ERROR, "\033[1;41m%s\033[1;0m" % logging.getLevelName(logging.ERROR))
+    logging.addLevelName( logging.INFO, "\033[1;32m%s\033[1;0m" % logging.getLevelName(logging.INFO))
+    logging.addLevelName( logging.DEBUG, "\033[1;85m%s\033[1;0m" % logging.getLevelName(logging.DEBUG))
+    
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
+    logging.info("C3TT publishing")
+    logging.debug("reading config")
+    
+    ### handle config
+    #make sure we have a config file
+    if not os.path.exists('client.conf'):
+        logging.error("Error: config file not found")
+        sys.exit(1)
+        
+    config = configparser.ConfigParser()
+    config.read('client.conf')
+    source = config['general']['source']
+    dest = config['general']['dest']
+    
+    source = "c3tt" #TODO quickfix for strange parser behavior
+    
+    if source == "c3tt":
+        ################### C3 Tracker ###################
+        #project = "projectslug"
+        group = config['C3Tracker']['group']
+        secret =  config['C3Tracker']['secret']
+    
+        if config['C3Tracker']['host'] == "None":
+                cleanUp('no tracker URL defined', -1)
+        else:
+            host = config['C3Tracker']['host']
+    
+        url = config['C3Tracker']['url']
+        from_state = config['C3Tracker']['from_state']
+        to_state = config['C3Tracker']['to_state']
+        token = config['twitter']['token'] 
+        token_secret = config['twitter']['token_secret']
+        consumer_key = config['twitter']['consumer_key']
+        consumer_secret = config['twitter']['consumer_secret']
+    
+    if True:
+        ################### media.ccc.de #################
+        #API informations
+        api_url =  config['media.ccc.de']['api_url']
+        api_key =  config['media.ccc.de']['api_key']
+        
+    #if we dont use the tracker we need to get the informations from the config
+    #TODO add also target check for youtube only
+    if source != 'c3tt':
+        #################### conference information ######################
+        rec_path = config['conference']['rec_path']
+        image_path = config['conference']['image_path']
+        webgen_loc = config['conference']['webgen_loc']
+    
+        ################### script environment ########################
+        # base dir for video input files (local)
+        video_base = config['env']['video_base']
+        # base dir for video output files (local)
+        output = config['env']['output']
+    
+    #path to the thumb export.
+    #this is also used as postfix for the publishing dir
+    if config['env']['thumb_path'] == None:
+        thumb_path = 'thumbnails'
+    else:
+        thumb_path = config['env']['thumb_path']
+    
+    # #codec / container related paths
+    # #this paths should be the same on media and local !!
+    # #if you want to add new codecs make sure media.ccc.de knows the mimetype BEFORE you push something
+    # codecs = {
+    # "h264" : {"path" : "mp4/",
+    #           "ext" : ".mp4",
+    #           "mimetype" : "video/mp4"},
+    # "webm" : {"path" : "webm/",
+    #           "ext": ".webm",
+    #           "mimetype" : "video/webm"},
+    # "ogv" : {"path" : "ogv/",
+    #          "ext" : ".ogv",
+    #          "mimetype" : "video/ogg"},
+    # "mp3" : {"path" : "mp3/", 
+    #          "ext" : ".mp3",
+    #          "mimetype" : "audio/mpeg"},
+    # "opus" : {"path" : "opus/",
+    #           "ext" : ".opus", 
+    #           "mimetype" : "audio/opus"},
+    # "ogg"  : {"path" : "ogg/",
+    #           "ext"  :  ".ogg"}
+    # }
+    
+    #internal vars
+    ticket = None
+    ticket_failed = True
+    error_msg = None
+    exit_code = 0 
+    filesize = 0
+    length = 0
+    sftp = None
+    ssh = None
+    title = None
+    frab_data = None
+    acronyms = None
+    guid = None
+    filename = None
+    debug = 0
+    slug = None
+    slug_c = None #slug without :
+    rpc_client = None
+    title = None
+    subtitle = None 
+    description = None
+    profile_slug = None
+    folder = None
+    mime_type = None
+    
+    #TODO das sollte ne liste werden
+    target_youtube = None
+    target_media = None
+    
+    
+    ticketFromTracker()()
+    targetFromPropertie()
+
+    # set ticket done
+    logging.info("set ticket done")
+
+if __name__ == "__main__": main()

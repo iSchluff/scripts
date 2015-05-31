@@ -1,0 +1,7 @@
++ thumbs folder anlegen
++ thumbs debugging
++ curl head zum checken ob files wirklich da sind
++ twitter link ins ticket schreiben
++ twitter duplicate tweet handeln
++ twitter deaktivierbar machen
+
