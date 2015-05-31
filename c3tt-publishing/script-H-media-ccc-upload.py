@@ -176,14 +176,14 @@ def cleanUp(msg=None,exit_code=None):
     
     if exit_code < 0: #something went wrong
         if ticket: #check if we already have a ticket id, if not we don't need to talk to the tracker
-            if msg:
+            if msg: #check if we have a error message 
                 setTicketFailed(ticket_id, "Publishing failed: \n" + str(msg), url, group, host, secret)
                 logging.error(msg)
             else:
                 setTicketFailed(ticket_id, "Publishing failed: \n" + " unknown reason", url, group, host, secret)
                 logging.error(msg)
             sys.exit(exit_code)
-    else:
+    else: #either publishing succeeded or we the tracker has no job for us
         if ticket: #check if we already have a ticket id, if not we don't need to talk to the tracker 
             send_tweet(ticket, token, token_secret, consumer_key, consumer_secret)
             setTicketDone(ticket_id, url, group, host, secret)
@@ -194,6 +194,8 @@ def cleanUp(msg=None,exit_code=None):
 def main():
     """init and control flow a done here
     """
+    ### setup logging
+    global logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     
@@ -208,15 +210,15 @@ def main():
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     
-    logging.info("C3TT publishing")
-    logging.debug("reading config")
+    logger.info("C3TT publishing")
+    logger.debug("reading config")
     
     ### handle config
     #make sure we have a config file
     if not os.path.exists('client.conf'):
-        logging.error("Error: config file not found")
-        sys.exit(1)
-        
+        cleanup("Error: config file not found", -1)
+    
+    global config
     config = configparser.ConfigParser()
     config.read('client.conf')
     source = config['general']['source']
@@ -224,33 +226,56 @@ def main():
     
     source = "c3tt" #TODO quickfix for strange parser behavior
     
-    if source == "c3tt":
-        ################### C3 Tracker ###################
-        #project = "projectslug"
-        group = config['C3Tracker']['group']
-        secret =  config['C3Tracker']['secret']
-    
-        if config['C3Tracker']['host'] == "None":
-                cleanUp('no tracker URL defined', -1)
+    if source == "c3tt": # The c3tt is the source, init tracker related variables
+        global group
+        if config['C3Tracker']['group']:
+            group = config['C3Tracker']['group']
         else:
+            cleanup("tracker group is missing", -1)
+        
+        global secret
+        if config['C3Tracker']['secret']:
+            secret = config['C3Tracker']['secret']
+        else:
+            cleanup("tracker secret is missing", -1)
+        
+        global host
+        if config['C3Tracker']['host']:
             host = config['C3Tracker']['host']
-    
-        url = config['C3Tracker']['url']
-        from_state = config['C3Tracker']['from_state']
-        to_state = config['C3Tracker']['to_state']
+        else:
+            host = socket.getfqdn()
+            logging.debug("no hostname defined, using localhosts fqdn")
+
+        global url    
+        if config['C3Tracker']['url']:
+            url = config['C3Tracker']['url']
+        else:
+            cleanup("tracker url is missing", -1)
+        
+        global from_state
+        if config['C3Tracker']['from_state']:
+            from_state = config['C3Tracker']['from_state']
+        else:
+            cleanup("from_state is missing",-1)
+        
+        global to_state
+        if config['C3Tracker']['to_state']:
+            to_state = config['C3Tracker']['to_state']
+        else:
+            cleanup("to_state is missing", -1)
+        
+        #TODO move this after the ticket fetch to see if we want twitter at all    
         token = config['twitter']['token'] 
         token_secret = config['twitter']['token_secret']
         consumer_key = config['twitter']['consumer_key']
         consumer_secret = config['twitter']['consumer_secret']
     
     if True:
-        ################### media.ccc.de #################
         #API informations
         api_url =  config['media.ccc.de']['api_url']
         api_key =  config['media.ccc.de']['api_key']
         
     #if we dont use the tracker we need to get the informations from the config
-    #TODO add also target check for youtube only
     if source != 'c3tt':
         #################### conference information ######################
         rec_path = config['conference']['rec_path']
