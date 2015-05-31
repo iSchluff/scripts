@@ -1,11 +1,18 @@
-This reposetory contains a glue script that talks to the C3TT [1] and api.media.ccc.de to allow publishing of conference recordings.
+This is small glue application that is able to fetch publishing jobs from the c3tt [1] and publish against the media.ccc.de API [2] and youtube.
+It can also tweet about published files. 
 
-== Depencies
+In the future it will also be able to publish files withtout the tracker.
+
+Depencies
+=========
+
 Debian / Ubuntu
-sudo apt-get install python3 python3-requests python3-pip
-sudo pip-3.2 install paramiko
+---------------
+  sudo apt-get install python3 python3-requests python3-pip
+  
 
-== Usage
+Usage
+=====
 
 
 
