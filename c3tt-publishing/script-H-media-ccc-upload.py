@@ -136,9 +136,8 @@ def mediaFromTicket():
     """
     
     logging.info("creating event on " + api_url)
-    logging.info("=========================================")
 
-    #create a event on media
+    #create a event on media API
     #TODO master/slave ticket handling
     if profile_slug != "mp3" and profile_slug != "opus":        
         try:
@@ -146,7 +145,7 @@ def mediaFromTicket():
         except RuntimeError as err:
             cleanup("Creating event on media API failed, in case of audio releases make sure event exists: \n" + str(err), -1)
     
-    #publish the media file on media
+    #publish the media file on media API
     if not 'Publishing.Media.MimeType' in ticket:
         cleanup("No mime type set",-1)
     else:
@@ -175,20 +174,21 @@ def cleanUp(msg=None,exit_code=None):
     and twitter up to date. Arguments are optional an should only be set in error case.
     """
     
-    #TODO check if we already have ticket, if not don't call the tracker
     if exit_code < 0: #something went wrong
-        if msg:
-            setTicketFailed(ticket_id, "Publishing failed: \n" + str(msg), url, group, host, secret)
-            logging.error(msg)
-        else:
-            setTicketFailed(ticket_id, "Publishing failed: \n" + " unknown reason", url, group, host, secret)
-            logging.error(msg)
-        sys.exit(exit_code)
-    else: #all good lets tweet about it (if configured)
-        send_tweet(ticket, token, token_secret, consumer_key, consumer_secret)
-        setTicketDone(ticket_id, url, group, host, secret)
-        logging.info("cleanup down, exiting normal")
-    
+        if ticket: #check if we already have a ticket id, if not we don't need to talk to the tracker
+            if msg:
+                setTicketFailed(ticket_id, "Publishing failed: \n" + str(msg), url, group, host, secret)
+                logging.error(msg)
+            else:
+                setTicketFailed(ticket_id, "Publishing failed: \n" + " unknown reason", url, group, host, secret)
+                logging.error(msg)
+            sys.exit(exit_code)
+    else:
+        if ticket: #check if we already have a ticket id, if not we don't need to talk to the tracker 
+            send_tweet(ticket, token, token_secret, consumer_key, consumer_secret)
+            setTicketDone(ticket_id, url, group, host, secret)
+            
+    logging.info("cleanup down, exiting normal")
     sys.exit(0)
 
 def main():
@@ -270,28 +270,6 @@ def main():
     else:
         thumb_path = config['env']['thumb_path']
     
-    # #codec / container related paths
-    # #this paths should be the same on media and local !!
-    # #if you want to add new codecs make sure media.ccc.de knows the mimetype BEFORE you push something
-    # codecs = {
-    # "h264" : {"path" : "mp4/",
-    #           "ext" : ".mp4",
-    #           "mimetype" : "video/mp4"},
-    # "webm" : {"path" : "webm/",
-    #           "ext": ".webm",
-    #           "mimetype" : "video/webm"},
-    # "ogv" : {"path" : "ogv/",
-    #          "ext" : ".ogv",
-    #          "mimetype" : "video/ogg"},
-    # "mp3" : {"path" : "mp3/", 
-    #          "ext" : ".mp3",
-    #          "mimetype" : "audio/mpeg"},
-    # "opus" : {"path" : "opus/",
-    #           "ext" : ".opus", 
-    #           "mimetype" : "audio/opus"},
-    # "ogg"  : {"path" : "ogg/",
-    #           "ext"  :  ".ogg"}
-    # }
     
     #internal vars
     ticket = None
