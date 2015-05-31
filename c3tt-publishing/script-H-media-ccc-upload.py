@@ -37,23 +37,6 @@ from youtube_client import *
 from twitter_client import *
 from pyasn1_modules.rfc4210 import ErrorMsgContent
 
-#TODO This should go into main
-def targetFromPropertie():
-    global target_youtube
-    global target_media
-
-    logging.debug("encoding profile youtube flag: " + ticket['Publishing.YouTube.EnableProfile'] + " project youtube flag: " + ticket['Publishing.YouTube.Enable'])
-    if ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes" and not has_youtube_url:
-        logging.debug("publishing on youtube")
-        target_youtube = True
-        youtubeFromTicket()
-
-    logging.debug("encoding profile media flag: " + ticket['Publishing.Media.EnableProfile'] + " project media flag: " + ticket['Publishing.Media.Enable'])
-    if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes":
-        logging.debug("publishing on media")
-        target_media = True
-        mediaFromTicket()
-
 def ticketFromTracker():
     """ Get a ticket from the tracker and prepare internal variables based on the ticket
     """
@@ -127,6 +110,7 @@ def ticketFromTracker():
         
         if not os.access(output, os.W_OK):
             cleanup("Output path is not writable ("+output+")",-1)
+    
     else:
         logging.warn("No ticket for this task, exiting")
         cleanup()
@@ -134,38 +118,39 @@ def ticketFromTracker():
 def mediaFromTicket():
     """ prepare the media.ccc.de API call from Ticket
     """
-    
-    logging.info("creating event on " + api_url)
 
     #create a event on media API
     #TODO master/slave ticket handling
-    if profile_slug != "mp3" and profile_slug != "opus":        
+    if ticket['EncodingProfile.Slug'] != "mp3" and ticket['EncodingProfile.Slug'] != "opus":
+        logging.info("creating event on " + config['media.ccc.de']['api_url'])        
         try:
-            make_event(api_url, download_base_url, local_filename, local_filename_base, api_key, acronym, guid, video_base, output, slug, title, subtitle, description)
+            make_event(ticket, config['media.ccc.de']['api_url'], config['media.ccc.de']['api_key'])
         except RuntimeError as err:
             cleanup("Creating event on media API failed, in case of audio releases make sure event exists: \n" + str(err), -1)
     
-    #publish the media file on media API
-    if not 'Publishing.Media.MimeType' in ticket:
-        cleanup("No mime type set",-1)
-    else:
+    if 'Publishing.Media.MimeType' in ticket:
         mime_type = ticket['Publishing.Media.MimeType']
-
+    else:
+        cleanup("No mime type set", -1)
+        
+    #publish the media file on media API
+    logging.info("publishing recording on " + config['media.ccc.de']['api_url'])
     try:
-        publish(local_filename, filename, api_url, download_base_url, api_key, guid, filesize, length, mime_type, folder, video_base)
+        publish(ticket, config['media.ccc.de']['api_url'], config['media.ccc.de']['api_key'])
     except RuntimeError as err:
         cleanup("Publishing on media API failed" + str(err),-1)
  
 def youtubeFromTicket():
     """ prepare the youtube call to publish on youtube
     """
+    logging.info("publishing recording on youtube")
     try:
         youtubeUrls = publish_youtube(ticket, config['youtube']['client_id'], config['youtube']['secret'])
         props = {}
         for i, youtubeUrl in enumerate(youtubeUrls):
             props['YouTube.Url'+str(i)] = youtubeUrl
-
-        setTicketProperties(ticket_id, props, url, group, host, secret)
+        if config['general']['source'] == 'c3tt':
+            setTicketProperties(ticket_id, props, url, group, host, secret)
     except RuntimeError as err:
         cleanup("Publishing to youtube failed: \n" + str(err),-1)
 
@@ -224,9 +209,7 @@ def main():
     source = config['general']['source']
     dest = config['general']['dest']
     
-    source = "c3tt" #TODO quickfix for strange parser behavior
-    
-    if source == "c3tt": # The c3tt is the source, init tracker related variables
+    if source == 'c3tt': # The c3tt is the source, init tracker related variables
         global group
         if config['C3Tracker']['group']:
             group = config['C3Tracker']['group']
@@ -263,19 +246,13 @@ def main():
             to_state = config['C3Tracker']['to_state']
         else:
             cleanup("to_state is missing", -1)
+
+        ticketFromTracker()
         
-        #TODO move this after the ticket fetch to see if we want twitter at all    
-        token = config['twitter']['token'] 
-        token_secret = config['twitter']['token_secret']
-        consumer_key = config['twitter']['consumer_key']
-        consumer_secret = config['twitter']['consumer_secret']
-    
-    if True:
-        #API informations
-        api_url =  config['media.ccc.de']['api_url']
-        api_key =  config['media.ccc.de']['api_key']
+        
         
     #if we dont use the tracker we need to get the informations from the config
+    ## TODO make this usefull currently only c3tt is supported
     if source != 'c3tt':
         #################### conference information ######################
         rec_path = config['conference']['rec_path']
@@ -287,49 +264,27 @@ def main():
         video_base = config['env']['video_base']
         # base dir for video output files (local)
         output = config['env']['output']
-    
-    #path to the thumb export.
-    #this is also used as postfix for the publishing dir
-    if config['env']['thumb_path'] == None:
-        thumb_path = 'thumbnails'
-    else:
-        thumb_path = config['env']['thumb_path']
-    
-    
-    #internal vars
-    ticket = None
-    ticket_failed = True
-    error_msg = None
-    exit_code = 0 
-    filesize = 0
-    length = 0
-    sftp = None
-    ssh = None
-    title = None
-    frab_data = None
-    acronyms = None
-    guid = None
-    filename = None
-    debug = 0
-    slug = None
-    slug_c = None #slug without :
-    rpc_client = None
-    title = None
-    subtitle = None 
-    description = None
-    profile_slug = None
-    folder = None
-    mime_type = None
-    
-    #TODO das sollte ne liste werden
-    target_youtube = None
-    target_media = None
-    
-    
-    ticketFromTracker()()
-    targetFromPropertie()
 
-    # set ticket done
-    logging.info("set ticket done")
+    ##### AT THIS POINT THE TICKET NEEDS TO BE FILLD WITH ALL PROPERTIES !!!1!11 #######
+
+    logging.debug("encoding profile media flag: " + ticket['Publishing.Media.EnableProfile'] + " project media flag: " + ticket['Publishing.Media.Enable'])
+    if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes":
+        logging.debug("publishing on media")
+        mediaFromTicket()
+
+    logging.debug("encoding profile youtube flag: " + ticket['Publishing.YouTube.EnableProfile'] + " project youtube flag: " + ticket['Publishing.YouTube.Enable'])
+    if ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes" and not has_youtube_url:
+        logging.debug("publishing on youtube")
+        youtubeFromTicket()
+        
+    if ticket['Publishing.Twitter.Enable'] ==  "yes":
+        #TODO: let the twitter script read the config 
+        logger.debug("ticket has Twitter.Enable flag")   
+        token = config['twitter']['token'] 
+        token_secret = config['twitter']['token_secret']
+        consumer_key = config['twitter']['consumer_key']
+        consumer_secret = config['twitter']['consumer_secret']
+
+    cleanup()
 
 if __name__ == "__main__": main()

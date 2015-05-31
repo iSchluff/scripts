@@ -46,6 +46,17 @@ def make_thumbs(video_base, local_filename, output):
 def make_event(api_url, download_base_url, local_filename, local_filename_base, api_key, acronym, guid, video_base, output, slug, title, subtitle, description):
     logger.info(("## generating new event on " + api_url + " ##"))
     
+    
+    
+#         #path to the thumb export.
+#     #this is also used as postfix for the publishing dir
+#     if config['env']['thumb_path'] == None:
+#         thumb_path = 'thumbnails'
+#     else:
+#         thumb_path = config['env']['thumb_path']
+
+    
+    
     #generate the thumbnails (will not overwrite existing thumbs)
     if not os.path.isfile(output + "/" + str(local_filename_base) + ".jpg"):
         if not make_thumbs(video_base, local_filename, output):
