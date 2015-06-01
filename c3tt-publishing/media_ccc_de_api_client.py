@@ -43,19 +43,16 @@ def make_thumbs(video_base, local_filename, output):
     return True
     
 # make a new event on media
-def make_event(api_url, download_base_url, local_filename, local_filename_base, api_key, acronym, guid, video_base, output, slug, title, subtitle, description):
+def make_event(ticket, api_url, api_key):
     logger.info(("## generating new event on " + api_url + " ##"))
     
-    
-    
-#         #path to the thumb export.
-#     #this is also used as postfix for the publishing dir
-#     if config['env']['thumb_path'] == None:
-#         thumb_path = 'thumbnails'
-#     else:
-#         thumb_path = config['env']['thumb_path']
+    #this is also used as postfix for the publishing dir
+    if config['env']['thumb_path'] == None:
+        thumb_path = 'thumbs/'
+    else:
+        thumb_path = config['env']['thumb_path']
 
-    
+    #TODO add check for thumbfolder / mdir
     
     #generate the thumbnails (will not overwrite existing thumbs)
     if not os.path.isfile(output + "/" + str(local_filename_base) + ".jpg"):
@@ -67,16 +64,17 @@ def make_event(api_url, download_base_url, local_filename, local_filename_base, 
         description = ''
     if subtitle == None:
         subtitle = ''
-#    title = title.replace('"','')
-#    title = title.replace(':','')
+    
+    local_filename_base =  str(ticket['Fahrplan.ID']) + "-" + ticket['EncodingProfile.Slug']
+
     # prepare variables for api call
-    thumb_url = download_base_url + "thumbs/" + str(local_filename_base) + ".jpg"
-    poster_url = download_base_url + "thumbs/" + str(local_filename_base) + "_preview.jpg"
+    thumb_url = ticket["Publishing.Base.Url"] + thumb_path + str(local_filename_base) + ".jpg"
+    poster_url = ticket["Publishing.Base.Url"] + thumb_path  + str(local_filename_base) + "_preview.jpg"
     url = api_url + 'events'
     headers = {'CONTENT-TYPE' : 'application/json'}
     payload = {'api_key' : api_key,
-               'acronym' : acronym,
-               'guid' : guid,
+               'acronym' : ticket['Project.Slug'],
+               'guid' : ticket['Fahrplan.GUID'],
                'poster_url' : poster_url,
                'thumb_url' : thumb_url,
 	       'slug' : slug,

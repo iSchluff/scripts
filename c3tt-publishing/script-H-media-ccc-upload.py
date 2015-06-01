@@ -47,31 +47,13 @@ def ticketFromTracker():
     global ticket_id
     ticket_id = assignNextUnassignedForState(from_state, to_state, url, group, host, secret)
     if ticket_id != False:
-        #copy ticket details to local variables
         logging.info("Ticket ID:" + str(ticket_id))
+        #TODO we may can also pass this arround instead of a global variable
         global ticket
         ticket = getTicketProperties(str(ticket_id), url, group, host, secret)
         logging.debug("Ticket: " + str(ticket))
-        global acronym
-        global local_filename
-        global local_filename_base
-        global profile_extension
-        global profile_slug
-        global video_base
-        global output
-        global filename
-        global guid
-        global slug
-        global title
-        global subtitle 
-        global description
-        global download_base_url
-        global folder
         
-        #todo this shoul only be used if youtube propertie is set
-        global has_youtube_url
-        
-        #TODO add here some try magic to catch missing properties
+
         guid = ticket['Fahrplan.GUID']
         slug = ticket['Fahrplan.Slug'] if 'Fahrplan.Slug' in ticket else str(ticket['Fahrplan.ID'])
         slug_c = slug.replace(":","_")    
@@ -86,7 +68,7 @@ def ticketFromTracker():
         profile_extension = ticket['EncodingProfile.Extension']
         profile_slug = ticket['EncodingProfile.Slug']
         
-        #todo this shoul only be used if youtube propertie is set
+        #todo this should only be used if youtube propertie is set
         if 'YouTube.Url0' in ticket and ticket['YouTube.Url0'] != "":
                 has_youtube_url = True
         else:
@@ -248,22 +230,21 @@ def main():
             cleanup("to_state is missing", -1)
 
         ticketFromTracker()
-        
-        
-        
+          
     #if we dont use the tracker we need to get the informations from the config
     ## TODO make this usefull currently only c3tt is supported
     if source != 'c3tt':
-        #################### conference information ######################
-        rec_path = config['conference']['rec_path']
-        image_path = config['conference']['image_path']
-        webgen_loc = config['conference']['webgen_loc']
-    
-        ################### script environment ########################
-        # base dir for video input files (local)
-        video_base = config['env']['video_base']
-        # base dir for video output files (local)
-        output = config['env']['output']
+        cleanup("only c3tt is currently supported as source", -1)
+#         #################### conference information ######################
+#         rec_path = config['conference']['rec_path']
+#         image_path = config['conference']['image_path']
+#         webgen_loc = config['conference']['webgen_loc']
+#     
+#         ################### script environment ########################
+#         # base dir for video input files (local)
+#         video_base = config['env']['video_base']
+#         # base dir for video output files (local)
+#         output = config['env']['output']
 
     ##### AT THIS POINT THE TICKET NEEDS TO BE FILLD WITH ALL PROPERTIES !!!1!11 #######
 
