@@ -60,10 +60,6 @@ def make_event(ticket, api_url, api_key):
             return False
     else:
         logger.info("thumb exists skipping")
-    if description == None:
-        description = ''
-    if subtitle == None:
-        subtitle = ''
     
     local_filename_base =  str(ticket['Fahrplan.ID']) + "-" + ticket['EncodingProfile.Slug']
 
@@ -77,16 +73,16 @@ def make_event(ticket, api_url, api_key):
                'guid' : ticket['Fahrplan.GUID'],
                'poster_url' : poster_url,
                'thumb_url' : thumb_url,
-	       'slug' : slug,
-	       'title' : title,
-	       'subtitle' : subtitle,
-	       'description' : description
+	       'slug' : ticket['Fahrplan.Slug'] if 'Fahrplan.Slug' in ticket else str(ticket['Fahrplan.ID']),
+	       'title' : ticket['Fahrplan.Title'] if 'Fahrplan.Titel' in ticket else '',
+	       'subtitle' : ticket['Fahrplan.Subtitle'] if 'Fahrplan.Subtitle' in ticket else '',
+	       'description' : ticket['Fahrplan.Abstract'] if 'Fahrplan.Abstract' in ticket else '',
 	      }     
     logger.debug(payload)
 
     #call media api (and ignore SSL this should be fixed on media site)
     try:
-        logger.debug("api url: " + url)
+        logger.debug("api url: " + config['env']['thumb_path'])
         r = requests.post(url, headers=headers, data=json.dumps(payload), verify=False)
     except requests.packages.urllib3.exceptions.MaxRetryError as err:
         raise RuntimeError("Error during creating of event: " + str(err))
