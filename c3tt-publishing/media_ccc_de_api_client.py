@@ -25,9 +25,10 @@ import os
 import logging
 logger = logging.getLogger()
 
-#generate thumbnails for media.ccc.de
 def make_thumbs(video_base, local_filename, output):    
-    logger.info(("## generating thumbs for "  + video_base + local_filename + " ##"))
+    """ generate thumbnails for media.ccc.de
+    """
+    logger.info("## generating thumbs for "  + video_base + local_filename + " ##")
 
     try:
         subprocess.check_call(["postprocessing/generate_thumb_autoselect_compatible.sh", video_base + local_filename, output])
@@ -51,17 +52,24 @@ def make_event(ticket, api_url, api_key):
         thumb_path = 'thumbs/'
     else:
         thumb_path = config['env']['thumb_path']
-
-    #TODO add check for thumbfolder / mdir
     
-    #generate the thumbnails (will not overwrite existing thumbs)
-    if not os.path.isfile(output + "/" + str(local_filename_base) + ".jpg"):
+    path = ticket['Publishing.Path'] + thumb_path
+    
+    if not os.path.exists(path):
+        try:
+            os.mkdir(path)
+        except OSError as e:
+            e.msg = "error during creating thumb dir :" + e.msg
+            raise e
+    
+    local_filename_base = str(ticket['Fahrplan.ID']) + "-" + ticket['EncodingProfile.Slug']
+    output = ticket['Publishing.Path'] + thumb_path        
+    #generate the thumbnails if they don't exsist
+    if not os.path.isfile(ticket['Publishing.Path'] + str(local_filename_base) + ".jpg"):
         if not make_thumbs(video_base, local_filename, output):
-            return False
+            raise RuntimeError('error creating thumbs')
     else:
         logger.info("thumb exists skipping")
-    
-    local_filename_base =  str(ticket['Fahrplan.ID']) + "-" + ticket['EncodingProfile.Slug']
 
     # prepare variables for api call
     thumb_url = ticket["Publishing.Base.Url"] + thumb_path + str(local_filename_base) + ".jpg"
@@ -82,7 +90,7 @@ def make_event(ticket, api_url, api_key):
 
     #call media api (and ignore SSL this should be fixed on media site)
     try:
-        logger.debug("api url: " + config['env']['thumb_path'])
+        logger.debug("api url: " + thumb_path )
         r = requests.post(url, headers=headers, data=json.dumps(payload), verify=False)
     except requests.packages.urllib3.exceptions.MaxRetryError as err:
         raise RuntimeError("Error during creating of event: " + str(err))

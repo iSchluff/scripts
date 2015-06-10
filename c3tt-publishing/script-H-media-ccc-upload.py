@@ -48,41 +48,38 @@ def ticketFromTracker():
     ticket_id = assignNextUnassignedForState(from_state, to_state, url, group, host, secret)
     if ticket_id != False:
         logging.info("Ticket ID:" + str(ticket_id))
-        #TODO we may can also pass this arround instead of a global variable
-        global ticket
+        
         ticket = getTicketProperties(str(ticket_id), url, group, host, secret)
         logging.debug("Ticket: " + str(ticket))
-        
-
-        guid = ticket['Fahrplan.GUID']
         slug = ticket['Fahrplan.Slug'] if 'Fahrplan.Slug' in ticket else str(ticket['Fahrplan.ID'])
-        slug_c = slug.replace(":","_")    
-        acronym = ticket['Project.Slug']
-        filename = str(ticket['EncodingProfile.Basename']) + "." + str(ticket['EncodingProfile.Extension'])
-        title = ticket['Fahrplan.Title']
+        slug_c = slug.replace(":","_")
         local_filename = str(ticket['Fahrplan.ID']) + "-" +ticket['EncodingProfile.Slug'] + "." + ticket['EncodingProfile.Extension']
-        local_filename_base =  str(ticket['Fahrplan.ID']) + "-" + ticket['EncodingProfile.Slug']
         video_base = str(ticket['Publishing.Path'])
         output = str(ticket['Publishing.Path']) + "/"+ str(thumb_path)
-        download_base_url =  str(ticket['Publishing.Base.Url'])
-        profile_extension = ticket['EncodingProfile.Extension']
-        profile_slug = ticket['EncodingProfile.Slug']
+
+        #title = ticket['Fahrplan.Title']
+        #folder = ticket['EncodingProfile.MirrorFolder']
+        #guid = ticket['Fahrplan.GUID']  
+        #acronym = ticket['Project.Slug']
+        #filename = str(ticket['EncodingProfile.Basename']) + "." + str(ticket['EncodingProfile.Extension'])
+        #title = ticket['Fahrplan.Title']
+        #local_filename_base =  str(ticket['Fahrplan.ID']) + "-" + ticket['EncodingProfile.Slug']
+        #download_base_url =  str(ticket['Publishing.Base.Url'])
+        #profile_extension = ticket['EncodingProfile.Extension']
+        #profile_slug = ticket['EncodingProfile.Slug']
         
-        #todo this should only be used if youtube propertie is set
+        #TODO this should only be used if youtube propertie is set
         if 'YouTube.Url0' in ticket and ticket['YouTube.Url0'] != "":
                 has_youtube_url = True
         else:
                 has_youtube_url = False
-        
-        title = ticket['Fahrplan.Title']
-        folder = ticket['EncodingProfile.MirrorFolder']
-        
-        if 'Fahrplan.Subtitle' in ticket:
-                subtitle = ticket['Fahrplan.Subtitle']
-        if 'Fahrplan.Abstract' in ticket:
-                description = ticket['Fahrplan.Abstract']
-                
-        logging.debug("Data for media: guid: " + guid + " slug: " + slug_c + " acronym: " + acronym  + " filename: "+ filename + " title: " + title + " local_filename: " + local_filename + ' video_base: ' + video_base + ' output: ' + output)
+               
+#         if 'Fahrplan.Subtitle' in ticket:
+#                 subtitle = ticket['Fahrplan.Subtitle']
+#         if 'Fahrplan.Abstract' in ticket:
+#                 description = ticket['Fahrplan.Abstract']
+#                 
+        #logging.debug("Data for media: guid: " + ticket['Fahrplan.GUID'] + " slug: " + slug_c + " acronym: " + ticket['Project.Slug']  + " filename: "+ filename + " title: " + title + " local_filename: " + local_filename + ' video_base: ' + video_base + ' output: ' + output)
         
         if not os.path.isfile(video_base + local_filename):
             cleanup("Source file does not exist (" + video_base + local_filename +")",-1)
@@ -94,7 +91,7 @@ def ticketFromTracker():
             cleanup("Output path is not writable ("+output+")",-1)
     
     else:
-        logging.warn("No ticket for this task, exiting")
+        logging.info("No ticket for this task, exiting")
         cleanup()
 
 def mediaFromTicket():
@@ -228,9 +225,13 @@ def main():
             to_state = config['C3Tracker']['to_state']
         else:
             cleanup("to_state is missing", -1)
-
-        ticketFromTracker()
-          
+        
+        # try to get a ticket from tracker
+        try:
+            ticketFromTracker()
+        except Exception as e:
+            cleanup(e.msg, -1)
+        
     #if we dont use the tracker we need to get the informations from the config
     ## TODO make this usefull currently only c3tt is supported
     if source != 'c3tt':
@@ -251,12 +252,18 @@ def main():
     logging.debug("encoding profile media flag: " + ticket['Publishing.Media.EnableProfile'] + " project media flag: " + ticket['Publishing.Media.Enable'])
     if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes":
         logging.debug("publishing on media")
-        mediaFromTicket()
+        try:
+            mediaFromTicket()
+        except Exception as e:
+            cleanup(e.msg, -1)
 
     logging.debug("encoding profile youtube flag: " + ticket['Publishing.YouTube.EnableProfile'] + " project youtube flag: " + ticket['Publishing.YouTube.Enable'])
     if ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes" and not has_youtube_url:
         logging.debug("publishing on youtube")
-        youtubeFromTicket()
+        try:
+            youtubeFromTicket()
+        except Exception as e:
+            cleanup(e.msg, -1)
         
     if ticket['Publishing.Twitter.Enable'] ==  "yes":
         #TODO: let the twitter script read the config 
