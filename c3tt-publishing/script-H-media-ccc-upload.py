@@ -122,6 +122,7 @@ def mediaFromTicket():
 def youtubeFromTicket():
     """ prepare the youtube call to publish on youtube
     """
+    
     logging.info("publishing recording on youtube")
     try:
         youtubeUrls = publish_youtube(ticket, config['youtube']['client_id'], config['youtube']['secret'])
@@ -147,7 +148,7 @@ def cleanUp(msg=None,exit_code=None):
                 setTicketFailed(ticket_id, "Publishing failed: \n" + " unknown reason", url, group, host, secret)
                 logging.error(msg)
             sys.exit(exit_code)
-    else: #either publishing succeeded or we the tracker has no job for us
+    else: #either publishing succeeded or the tracker has no job for us
         if ticket: #check if we already have a ticket id, if not we don't need to talk to the tracker 
             send_tweet(ticket, token, token_secret, consumer_key, consumer_secret)
             setTicketDone(ticket_id, url, group, host, secret)
@@ -249,30 +250,30 @@ def main():
 
     ##### AT THIS POINT THE TICKET NEEDS TO BE FILLD WITH ALL PROPERTIES !!!1!11 #######
 
-    logging.debug("encoding profile media flag: " + ticket['Publishing.Media.EnableProfile'] + " project media flag: " + ticket['Publishing.Media.Enable'])
     if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes":
-        logging.debug("publishing on media")
+        logging.info("publishing on media")
         try:
+            logging.debug("encoding profile media flag: " + ticket['Publishing.Media.EnableProfile'] + " project media flag: " + ticket['Publishing.Media.Enable'])
             mediaFromTicket()
         except Exception as e:
             cleanup(e.msg, -1)
-
-    logging.debug("encoding profile youtube flag: " + ticket['Publishing.YouTube.EnableProfile'] + " project youtube flag: " + ticket['Publishing.YouTube.Enable'])
+    
     if ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes" and not has_youtube_url:
-        logging.debug("publishing on youtube")
+        logging.info("publishing on youtube")
         try:
+            logging.debug("encoding profile youtube flag: " + ticket['Publishing.YouTube.EnableProfile'] + " project youtube flag: " + ticket['Publishing.YouTube.Enable'])
             youtubeFromTicket()
         except Exception as e:
             cleanup(e.msg, -1)
-        
+  
     if ticket['Publishing.Twitter.Enable'] ==  "yes":
-        #TODO: let the twitter script read the config 
-        logger.debug("ticket has Twitter.Enable flag")   
-        token = config['twitter']['token'] 
-        token_secret = config['twitter']['token_secret']
-        consumer_key = config['twitter']['consumer_key']
-        consumer_secret = config['twitter']['consumer_secret']
-
+        logging.info("tweeting on twitter")
+        try:
+            logging.debug("encoding profile twitter flag: " + ticket['Publishing.Twitter.EnableProfile'] + " project twitter flag: " + ticket['Publishing.Twitter.Enable'])
+            send_tweet(ticket, config['twitter']['token'] , config['twitter']['token_secret'], config['twitter']['consumer_key'], config['twitter']['consumer_secret'])
+        except Exception as e:
+            cleanup(e.msg, -1)
+        
     cleanup()
 
 if __name__ == "__main__": main()
