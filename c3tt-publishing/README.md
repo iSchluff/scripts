@@ -9,11 +9,15 @@ Depencies
 Debian / Ubuntu
 ---------------
   sudo apt-get install python3 python3-requests python3-pip
-  
+  sudo pip3 install twitter pyasn1 pyasn1-modules
 
 Usage
 =====
 
+Notes
+=====
+If your API endpoints use SSL make sure to have the either valid cert installed or import the root ca globaly.
+At the moment this script will not talk to untrusted SSL endpoints.
 
 
 "Viel Spaß am Gerät"

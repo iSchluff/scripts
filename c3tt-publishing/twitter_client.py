@@ -21,12 +21,15 @@ logger = logging.getLogger()
 
 
 def send_tweet(ticket, token, token_secret, consumer_key, consumer_secret):
-    global target_youtube
-    global target_media
 
-    target = "media.ccc.de" if target_media == True
-    target = "YouTube"      if target_youtube == True
-    target = "media.ccc.de and youtube" if target_media == True and target_youtube == True
+    if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes":
+        target = "media.ccc.de" 
+
+    if ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes":
+        target = "youtube"
+    
+    if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes" and ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes":
+        target = "media.ccc.de and youtube"
 
     logger.info("tweeting the release (" + target + ")")
 

@@ -37,6 +37,7 @@ from youtube_client import *
 from twitter_client import *
 from pyasn1_modules.rfc4210 import ErrorMsgContent
 
+ticket = None;
 def ticketFromTracker():
     """ Get a ticket from the tracker and prepare internal variables based on the ticket
     """
@@ -45,17 +46,21 @@ def ticketFromTracker():
     
     #check if we got a new ticket
     global ticket_id
+    global host
+    if host == None:
+        host = socket.getfqdn()
     ticket_id = assignNextUnassignedForState(from_state, to_state, url, group, host, secret)
     if ticket_id != False:
         logging.info("Ticket ID:" + str(ticket_id))
         
+        global ticket
         ticket = getTicketProperties(str(ticket_id), url, group, host, secret)
         logging.debug("Ticket: " + str(ticket))
         slug = ticket['Fahrplan.Slug'] if 'Fahrplan.Slug' in ticket else str(ticket['Fahrplan.ID'])
         slug_c = slug.replace(":","_")
         local_filename = str(ticket['Fahrplan.ID']) + "-" +ticket['EncodingProfile.Slug'] + "." + ticket['EncodingProfile.Extension']
         video_base = str(ticket['Publishing.Path'])
-        output = str(ticket['Publishing.Path']) + "/"+ str(thumb_path)
+        output = str(ticket['Publishing.Path']) + "/"+ str(config['C3Tracker']['thumb_path'])
 
         #title = ticket['Fahrplan.Title']
         #folder = ticket['EncodingProfile.MirrorFolder']
@@ -82,19 +87,19 @@ def ticketFromTracker():
         #logging.debug("Data for media: guid: " + ticket['Fahrplan.GUID'] + " slug: " + slug_c + " acronym: " + ticket['Project.Slug']  + " filename: "+ filename + " title: " + title + " local_filename: " + local_filename + ' video_base: ' + video_base + ' output: ' + output)
         
         if not os.path.isfile(video_base + local_filename):
-            cleanup("Source file does not exist (" + video_base + local_filename +")",-1)
+            cleanUp("Source file does not exist (" + video_base + local_filename +")",-1)
 
         if not os.path.exists(output):
-            cleanup("Output path does not exist ("+output+")",-1)
+            cleanUp("Output path does not exist ("+output+")",-1)
         
         if not os.access(output, os.W_OK):
-            cleanup("Output path is not writable ("+output+")",-1)
+            cleanUp("Output path is not writable ("+output+")",-1)
     
     else:
         logging.info("No ticket for this task, exiting")
-        cleanup()
+        cleanUp()
 
-def mediaFromTicket():
+def mediaFromTicket(ticket):
     """ prepare the media.ccc.de API call from Ticket
     """
 
@@ -105,21 +110,21 @@ def mediaFromTicket():
         try:
             make_event(ticket, config['media.ccc.de']['api_url'], config['media.ccc.de']['api_key'])
         except RuntimeError as err:
-            cleanup("Creating event on media API failed, in case of audio releases make sure event exists: \n" + str(err), -1)
+            cleanUp("Creating event on media API failed, in case of audio releases make sure event exists: \n" + str(err), -1)
     
     if 'Publishing.Media.MimeType' in ticket:
         mime_type = ticket['Publishing.Media.MimeType']
     else:
-        cleanup("No mime type set", -1)
+        cleanUp("No mime type set", -1)
         
     #publish the media file on media API
     logging.info("publishing recording on " + config['media.ccc.de']['api_url'])
     try:
         publish(ticket, config['media.ccc.de']['api_url'], config['media.ccc.de']['api_key'])
     except RuntimeError as err:
-        cleanup("Publishing on media API failed" + str(err),-1)
+        cleanUp("Publishing on media API failed" + str(err),-1)
  
-def youtubeFromTicket():
+def youtubeFromTicket(ticket):
     """ prepare the youtube call to publish on youtube
     """
     
@@ -132,9 +137,9 @@ def youtubeFromTicket():
         if config['general']['source'] == 'c3tt':
             setTicketProperties(ticket_id, props, url, group, host, secret)
     except RuntimeError as err:
-        cleanup("Publishing to youtube failed: \n" + str(err),-1)
+        cleanUp("Publishing to youtube failed: \n" + str(err),-1)
 
-def cleanUp(msg=None,exit_code=None):
+def cleanUp(msg=None,exit_code=0):
     """This should be called in case of an error / exception or at the end of all functions to bring the tracker 
     and twitter up to date. Arguments are optional an should only be set in error case.
     """
@@ -150,10 +155,10 @@ def cleanUp(msg=None,exit_code=None):
             sys.exit(exit_code)
     else: #either publishing succeeded or the tracker has no job for us
         if ticket: #check if we already have a ticket id, if not we don't need to talk to the tracker 
-            send_tweet(ticket, token, token_secret, consumer_key, consumer_secret)
+            send_tweet(ticket, config['twitter']['token'] , config['twitter']['token_secret'], config['twitter']['consumer_key'], config['twitter']['consumer_secret'])
             setTicketDone(ticket_id, url, group, host, secret)
             
-    logging.info("cleanup down, exiting normal")
+    logging.info("cleanUp down, exiting normal")
     sys.exit(0)
 
 def main():
@@ -181,7 +186,7 @@ def main():
     ### handle config
     #make sure we have a config file
     if not os.path.exists('client.conf'):
-        cleanup("Error: config file not found", -1)
+        cleanUp("Error: config file not found", -1)
     
     global config
     config = configparser.ConfigParser()
@@ -194,13 +199,13 @@ def main():
         if config['C3Tracker']['group']:
             group = config['C3Tracker']['group']
         else:
-            cleanup("tracker group is missing", -1)
+            cleanUp("tracker group is missing", -1)
         
         global secret
         if config['C3Tracker']['secret']:
             secret = config['C3Tracker']['secret']
         else:
-            cleanup("tracker secret is missing", -1)
+            cleanUp("tracker secret is missing", -1)
         
         global host
         if config['C3Tracker']['host']:
@@ -208,35 +213,31 @@ def main():
         else:
             host = socket.getfqdn()
             logging.debug("no hostname defined, using localhosts fqdn")
-
+            
         global url    
         if config['C3Tracker']['url']:
             url = config['C3Tracker']['url']
         else:
-            cleanup("tracker url is missing", -1)
+            cleanUp("tracker url is missing", -1)
         
         global from_state
         if config['C3Tracker']['from_state']:
             from_state = config['C3Tracker']['from_state']
         else:
-            cleanup("from_state is missing",-1)
+            cleanUp("from_state is missing",-1)
         
         global to_state
         if config['C3Tracker']['to_state']:
             to_state = config['C3Tracker']['to_state']
         else:
-            cleanup("to_state is missing", -1)
+            cleanUp("to_state is missing", -1)
         
-        # try to get a ticket from tracker
-        try:
-            ticketFromTracker()
-        except Exception as e:
-            cleanup(e.msg, -1)
+
         
-    #if we dont use the tracker we need to get the informations from the config
+    #if we don't use the tracker we need to get the informations from the config
     ## TODO make this usefull currently only c3tt is supported
     if source != 'c3tt':
-        cleanup("only c3tt is currently supported as source", -1)
+        cleanUp("only c3tt is currently supported as source", -1)
 #         #################### conference information ######################
 #         rec_path = config['conference']['rec_path']
 #         image_path = config['conference']['image_path']
@@ -247,7 +248,15 @@ def main():
 #         video_base = config['env']['video_base']
 #         # base dir for video output files (local)
 #         output = config['env']['output']
-
+            # try to get a ticket from tracker
+    try:
+        ticketFromTracker()
+    except Exception as e:
+            #cleanUp(e.msg, -1)
+            #cleanUp(ticket,"exception caught", -1)
+        print("exception happend during ticketFromTracker\n"+str(e))
+        sys.exit()
+    
     ##### AT THIS POINT THE TICKET NEEDS TO BE FILLD WITH ALL PROPERTIES !!!1!11 #######
 
     if ticket['Publishing.Media.EnableProfile'] == "yes" and ticket['Publishing.Media.Enable'] == "yes":
@@ -256,7 +265,8 @@ def main():
             logging.debug("encoding profile media flag: " + ticket['Publishing.Media.EnableProfile'] + " project media flag: " + ticket['Publishing.Media.Enable'])
             mediaFromTicket()
         except Exception as e:
-            cleanup(e.msg, -1)
+            #cleanUp(e.msg, -1)
+            cleanUp("exception",-1)
     
     if ticket['Publishing.YouTube.EnableProfile'] == "yes" and ticket['Publishing.YouTube.Enable'] == "yes" and not has_youtube_url:
         logging.info("publishing on youtube")
@@ -264,7 +274,8 @@ def main():
             logging.debug("encoding profile youtube flag: " + ticket['Publishing.YouTube.EnableProfile'] + " project youtube flag: " + ticket['Publishing.YouTube.Enable'])
             youtubeFromTicket()
         except Exception as e:
-            cleanup(e.msg, -1)
+            #cleanUp(e.msg, -1)
+            cleanUp("exception",-1)
   
     if ticket['Publishing.Twitter.Enable'] ==  "yes":
         logging.info("tweeting on twitter")
@@ -272,8 +283,9 @@ def main():
             logging.debug("encoding profile twitter flag: " + ticket['Publishing.Twitter.EnableProfile'] + " project twitter flag: " + ticket['Publishing.Twitter.Enable'])
             send_tweet(ticket, config['twitter']['token'] , config['twitter']['token_secret'], config['twitter']['consumer_key'], config['twitter']['consumer_secret'])
         except Exception as e:
-            cleanup(e.msg, -1)
+            #cleanUp(e.msg, -1)
+            cleanUp("exception",-1)
         
-    cleanup()
+    cleanUp()
 
 if __name__ == "__main__": main()

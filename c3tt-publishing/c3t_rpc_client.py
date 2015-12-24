@@ -23,6 +23,7 @@ import urllib
 import xml
 import sys
 import logging
+import ssl
 
 logger = logging.getLogger()
 
@@ -72,7 +73,7 @@ def C3TClient(url, method, group, host, secret, args):
     #### create xmlrpc client
     logger.debug('creating XML RPC proxy: ' + url + "?group=" + group + "&hostname=" + host)
     try:
-        proxy = xmlrpc.client.ServerProxy(url + "?group=" + group + "&hostname=" + host);
+        proxy = xmlrpc.client.ServerProxy(url + "?group=" + group + "&hostname=" + host); #  context=ssl._create_unverified_context()
     except xmlrpc.client.Fault as err:
         logger.error("A fault occurred")
         logger.error("Fault code: %d" % err.faultCode)
